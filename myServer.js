@@ -5,6 +5,9 @@ const application_root=__dirname,
 
 const ctrl = require('./controllers');
 
+var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080,
+    ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0';
+
 var app = express();
 app.use(express.static(path.join(application_root,"public")));
 app.use(bodyparser.urlencoded({extended:true}));
@@ -54,8 +57,7 @@ app.get('/stream/:name/graph', ctrl.getGraph);
 ctrl.warmup.once("warmup", _ => {
    console.log("Web server running on port 8080");
    //app.listen(8080);
-	app.listen(8080, function () {
- 	console.log("the server is running!");
-	});
+   app.listen(port, ip);
+   console.log('Server running on http://%s:%s', ip, port);
 });
 
