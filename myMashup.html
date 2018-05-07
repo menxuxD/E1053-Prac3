@@ -1,0 +1,285 @@
+<html>
+<meta charset="UTF-8">
+<head>
+<title>Práctica 1: Mash-up de servicios</title>
+<style>
+
+body{
+	margin: 0px; 
+	text-align: center;
+}
+
+h1{
+	width:80%;
+	text-align: center;
+}
+
+button{
+    border: 1px solid black;
+    background-color: lightgray;
+    color: black;
+    border-radius: 0.5em;
+    padding: 4px;
+    margin: 3px;
+    width: 100px;
+}
+
+button#new{
+	width: 50px;
+	background-color: white;
+}
+
+table{
+	width: 910px;
+	margin-left: 30px;
+}
+
+div#streamlist{
+    width:910px;
+    height:30px;
+    background-color:#e6e6fa;
+}
+
+div#form-container{
+    visibility:hidden;
+    width:910px;
+    height:50px;
+}
+
+canvas#wordcloud{
+    width:355px;
+    height:300px;
+    background-color:lightgrey;
+}
+
+canvas#polarity{
+    width:150px;
+    height:300px;
+    background-color:lightgrey;
+}
+
+div#tweets{
+    width:910px;
+    height:30px;
+    background-color:white;
+}
+	
+div#mapcanvas{
+    width:400px;
+    height:300px;
+    background-color:lightgrey;
+}
+	
+div#fotos{
+    width:910px;
+    height:150px;
+    text-align:center;
+    background-color:#e6e6fa;
+}
+
+		
+	</style>
+<link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+<script src="http://timdream.org/wordcloud2.js/src/wordcloud2.js"></script>
+<script src="http://maps.googleapis.com/maps/api/js?key=AIzaSyD6hLLddlXLuJE52eCmsFbA8OGZ0eh_UO4&sensor=false"></script>
+
+<script>
+	$(document).ready(function(){
+
+	
+	   //**Obtiene los nombres de los botones llamando al servicio REST
+	   $.get("http://localhost:8080/streams", function(data){
+	   	
+		var lbuttons = data['result'];
+
+		$.each(lbuttons,function(indx, dato){
+			addButton(dato);
+		});
+
+			
+	   }); //Lista de Streams (Botones)
+	      
+	   //button for creating new streams
+	   $("#streamlist").append("<button id='NEW' width='1%'><b>+</b></button>");
+	   
+	   //event for button stream class
+	   $(".stream").click(function(){
+		actionButton(this);
+	   });
+	   
+	   //event for button "NEW"
+	   $("#NEW").click(function(){
+		//make visible the form
+		$("#form-container").css({"width":"910px","height":"50px","visibility":"visible"});
+		newdata=$("#name").val("");
+	   });
+	   
+	   //event for form button
+	   $("#create").click(function(){
+		//hide the form
+		$("#form-container").css({"visibility":"hidden"});
+		newdata=$("#name").val();
+		//create new button for new stream
+		addButton(newdata);
+	   });
+	});
+
+	function addButton(data){
+	  console.log(data);
+	  if (data[0].length>0){
+		newbutton="<button class='stream' id="+data[0]+">"+data[0]+" "+ data[1]+"</button>";
+		$(newbutton).insertBefore($("#NEW")).click(function(){actionButton(this);});
+	  };
+	};
+	 
+	function actionButton(data){
+	    streamname=data.getAttribute("id");
+
+	    //Cambiar por la llamada correspondiente al servicio REST --> localhost:8080/stream/{name}
+		$.get("http://localhost:8000/stream/"+streamname+"/words?top=5").done(function(data){
+       update_cloud(data.result);
+       })
+	    
+	    update_cloud(lwords);
+
+	    //Cambiar por la llamada correspondiente al servicio REST --> localhost:8080/streams
+	    positive= $.get("http://localhost:8080/streams", function(data){
+	    polarity={"positive":positive,"negative":1-positive};
+	    });
+
+	    update_polar(polarity);
+
+		//Cambiar por la llamada correspondiente al servicio REST --> localhost:8080/stream/{name}/geo
+		$.get("http://localhost:8000/stream/"+streamname+"/geo").done(function(data){
+		//console.log(data.result);
+		var geoPos={};
+		for (var i in data.result){
+			var marklabel = streamname+data.result[i][0];
+			geoPos[marklabel]=data.result[i][1];
+			}
+         update_map(geoPos);
+        })
+	   
+	    update_pictures(streamname);
+		
+		//Cambiar por la llamada correspondiente al servicio REST --> localhost:8080/stream/{name}/limit=5
+		$.get("http://localhost:8000/stream/"+streamname+"?limit=5").done(function(data){
+		$('#tweetsLinks').empty();
+		for (var i in data.result){
+         console.log(data.result[i]);
+          $("#tweets").append("<a href=\"https://twitter.com/statuses/"+ data.result[i]+ "\" target=\"_blank\">Tweet"+i+"\t\t</a>");
+		}
+		})
+	};
+
+	function update_polar(data){
+	    var canvas=document.getElementById("polarity");
+	    var contexto=canvas.getContext("2d");
+		
+ 	    //limpia canvas
+	    contexto.clearRect(0, 0, canvas.width, canvas.height);
+
+	    contexto.fillStyle="green";
+	    contexto.lineWidth=2;
+	    contexto.beginPath();
+	    contexto.rect(0,0,canvas.width,canvas.height*data["positive"],true)
+	    contexto.fill();
+		
+	    contexto.fillStyle="red";
+	    contexto.lineWidth=2;
+	    contexto.beginPath();
+	    contexto.rect(0,canvas.height*data["positive"],canvas.width,canvas.height,true)
+	    contexto.fill();
+
+	    contexto.font = "20px Courier";
+	    contexto.fillStyle="black";
+	    contexto.fillText("Polaridad",20,20);
+	};
+
+	function update_map(data){
+	    var mapProp = {
+		center:new google.maps.LatLng(40.0,-0.624207),
+		zoom:7,
+		mapTypeId:google.maps.MapTypeId.ROADMAP
+	    };
+	    var map=new google.maps.Map(document.getElementById("mapcanvas"),mapProp);
+		
+	    $.each(data,function(key,pos){
+		mark=new google.maps.LatLng(pos[0],pos[1]);
+		var marker=new google.maps.Marker({position:mark, title:key});
+		marker.setMap(map);
+	    });
+		
+	    google.maps.event.addDomListener(window, 'load', update_map);
+	};
+
+	function update_pictures(labels){
+	    var flickerAPI = "https://api.flickr.com/services/feeds/photos_public.gne?jsoncallback=?";
+	    $.getJSON( flickerAPI, {
+				tags:labels,
+				tagmode: "any",
+				format: "json"
+	    }).done(function(data){
+		  //clean photos area
+		  $("#fotos").empty();
+		
+		  $.each( data.items, function( i, item ) {
+			$( "<img>" ).attr( "src", item.media.m ).attr("height","145").appendTo( "#fotos" );
+			if ( i === 3 ) {return false;}
+		  });
+	    })	
+	}
+
+	function update_cloud(data){
+	  options= { list : data }; 
+	  WordCloud(document.getElementById('wordcloud'), options);
+	};
+
+</script>
+
+<body>
+
+<h1>My Mash-up - Carmen Moles</h1>
+<!--Hidden form for creating new buttons -->
+	<div id="form-container">
+		<label for="name" width="10%">Create stream:</label>
+		<input id="name"  width="40%" type="text" placeholder=".. stream name"/>
+		<input id="track" width="40%" type="text" placeholder=".. track terms"/>
+		<button id="create" width="10%" class="btn btn-info">Create</button>
+	</div>
+
+
+	<div class="row">
+		<div class="col-sm-12" id="streamlist"/>
+	</div>
+	<div class="row">
+	    <div class="col-sm-4">
+	       <canvas id="wordcloud"></canvas>
+	    </div>
+	    <div class="col-sm-4">			
+	       <canvas id="polarity"></canvas>
+           </div>
+	    <div class="col-sm-4">
+			<div id="mapcanvas"></div>
+	    </div>
+	</div>
+	<div class="row" id="tweets">
+	 	<div id="tweets" class="col-sm-12">
+	 		<b>Last tweets:</b> 
+			<!-- Cambiar para obtener dinámicamente los IDs de los tweets -->
+			<div class="row">
+				<div class="col-sm-12" id="tweetsLinks"/>
+			</div>
+       </div>
+	</div>
+	<div class="row">
+	    <div class="col-sm-12">
+			<div id="fotos" class="carousel slide" data-ride="carousel">
+				<ol  id="slides" class="carousel-indicators"></ol>
+				<div id="images" class="carousel-inner" role="listbox"></div>
+			</div>
+		</div>
+	</div>
+</body>
+</html>
