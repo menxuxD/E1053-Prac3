@@ -5,7 +5,7 @@ const https = require('https');
 const mng=require('mongoose');
 const my_conn_data="mongodb://al317217:menxu96@ds247759.mlab.com:47759/mydb_al317217";
 //Creamos la conexion con nuestra base de datos
-mng.connect(my_conn_data);
+//mng.connect(my_conn_data);
 
 
 exports.sendStatic    = (req,res) => res.sendFile("public/index.html",{root:application_root});
